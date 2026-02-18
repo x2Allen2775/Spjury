@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SPJURY — AI Sports Injury Predictor</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --cyan:#00f5ff;
+  --magenta:#ff007f;
+  --green:#00ff41;
+  --yellow:#ffe600;
+  --red:#ff1a1a;
+  --dark:#04050d;
+  --dark2:#090b18;
+  --panel:#0d1128;
+  --panel2:#111730;
+  --glow-cyan:0 0 8px #00f5ff,0 0 20px #00f5ff44,0 0 40px #00f5ff22;
+  --glow-magenta:0 0 8px #ff007f,0 0 20px #ff007f44;
+  --glow-green:0 0 8px #00ff41,0 0 20px #00ff4144;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--dark);color:#ccd6f6;font-family:'Rajdhani',sans-serif;min-height:100vh;overflow-x:hidden}
+
+/* Scan-line overlay */
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(transparent,transparent 2px,rgba(0,0,0,.05) 2px,rgba(0,0,0,.05) 4px);
+}
+
+/* Grid bg */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(0,245,255,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,245,255,.03) 1px,transparent 1px);
+  background-size:60px 60px;
+  animation:gridPulse 8s ease-in-out infinite;
+}
+@keyframes gridPulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+/* -------- HEADER -------- */
+header{
+  text-align:center;padding:40px 20px 20px;position:relative;
+  border-bottom:1px solid #00f5ff22;
+}
+.header-badge{
+  display:inline-block;background:linear-gradient(135deg,#00f5ff12,#ff007f12);
+  border:1px solid #00f5ff44;border-radius:4px;padding:4px 14px;
+  font-family:'Share Tech Mono',monospace;font-size:.7rem;letter-spacing:3px;
+  color:var(--cyan);margin-bottom:16px;animation:flicker 4s infinite;
+}
+@keyframes flicker{0%,95%,100%{opacity:1}96%{opacity:.5}97%{opacity:1}98%{opacity:.3}99%{opacity:1}}
+
+.title{
+  font-family:'Orbitron',sans-serif;font-size:clamp(1.5rem,4vw,3rem);font-weight:900;
+  line-height:1.1;
+  background:linear-gradient(135deg,var(--cyan),var(--magenta));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  text-shadow:none;
+  filter:drop-shadow(0 0 20px #00f5ff88);
+  letter-spacing:2px;
+}
+.subtitle{
+  font-family:'Share Tech Mono',monospace;font-size:.9rem;
+  color:var(--magenta);letter-spacing:4px;margin-top:8px;
+  text-shadow:var(--glow-magenta);
+}
+.team-tag{
+  margin-top:12px;font-size:.85rem;color:#7788aa;letter-spacing:2px;
+}
+.team-tag span{color:var(--cyan);font-weight:600;}
+
+/* Corner decorators */
+.corner{position:absolute;width:30px;height:30px;border-color:var(--cyan);border-style:solid;}
+.corner-tl{top:20px;left:20px;border-width:2px 0 0 2px;}
+.corner-tr{top:20px;right:20px;border-width:2px 2px 0 0;}
+.corner-bl{bottom:0;left:20px;border-width:0 0 2px 2px;}
+.corner-br{bottom:0;right:20px;border-width:0 2px 2px 0;}
+
+/* -------- TABS -------- */
+.tabs{
+  display:flex;justify-content:center;gap:4px;padding:20px 20px 0;
+  border-bottom:2px solid #00f5ff22;
+}
+.tab-btn{
+  font-family:'Orbitron',sans-serif;font-size:.75rem;letter-spacing:2px;
+  padding:12px 28px;background:transparent;border:1px solid #00f5ff33;
+  color:#556680;cursor:pointer;transition:all .3s;position:relative;
+  clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
+}
+.tab-btn:hover,.tab-btn.active{
+  background:linear-gradient(135deg,#00f5ff15,#ff007f10);
+  border-color:var(--cyan);color:var(--cyan);
+  box-shadow:var(--glow-cyan);
+  text-shadow:0 0 8px var(--cyan);
+}
+.tab-btn .tab-emoji{font-size:1.1rem;margin-right:6px;}
+
+/* -------- MAIN LAYOUT -------- */
+.main{max-width:1400px;margin:0 auto;padding:30px 20px;}
+
+.tab-content{display:none;}
+.tab-content.active{display:block;animation:fadeIn .4s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+.two-col{display:grid;grid-template-columns:380px 1fr;gap:24px;}
+@media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+
+/* -------- PANEL -------- */
+.panel{
+  background:var(--panel);border:1px solid #00f5ff22;border-radius:4px;
+  padding:24px;position:relative;overflow:hidden;
+}
+.panel::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+  animation:scanLine 3s linear infinite;
+}
+@keyframes scanLine{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+
+.panel-title{
+  font-family:'Orbitron',sans-serif;font-size:.8rem;letter-spacing:3px;
+  color:var(--cyan);margin-bottom:20px;display:flex;align-items:center;gap:8px;
+  text-shadow:var(--glow-cyan);
+}
+.panel-title::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--cyan),transparent);}
+
+/* -------- UPLOAD ZONE -------- */
+.upload-zone{
+  border:2px dashed #00f5ff44;border-radius:4px;padding:40px 20px;text-align:center;
+  cursor:pointer;transition:all .3s;position:relative;background:#00f5ff05;
+}
+.upload-zone:hover,.upload-zone.dragging{
+  border-color:var(--cyan);background:#00f5ff10;
+  box-shadow:var(--glow-cyan);
+}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-icon{font-size:2.5rem;margin-bottom:12px;display:block;}
+.upload-text{font-family:'Orbitron',sans-serif;font-size:.75rem;letter-spacing:2px;color:var(--cyan);}
+.upload-sub{font-size:.8rem;color:#556680;margin-top:8px;}
+.file-name{margin-top:12px;font-family:'Share Tech Mono',monospace;font-size:.8rem;
+  color:var(--green);text-shadow:var(--glow-green);word-break:break-all;}
+
+/* -------- ANALYZE BTN -------- */
+.analyze-btn{
+  width:100%;margin-top:20px;padding:16px;
+  font-family:'Orbitron',sans-serif;font-size:.85rem;letter-spacing:4px;
+  background:linear-gradient(135deg,#00f5ff15,#ff007f10);
+  border:1px solid var(--cyan);color:var(--cyan);cursor:pointer;
+  transition:all .3s;position:relative;overflow:hidden;
+  clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);
+}
+.analyze-btn::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(0,245,255,.15),transparent);
+  transform:translateX(-100%);transition:transform .5s;
+}
+.analyze-btn:hover::before{transform:translateX(100%);}
+.analyze-btn:hover{
+  background:linear-gradient(135deg,#00f5ff30,#ff007f20);
+  box-shadow:var(--glow-cyan),inset 0 0 20px rgba(0,245,255,.05);
+  text-shadow:var(--glow-cyan);
+}
+.analyze-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+/* -------- PROGRESS -------- */
+.progress-wrap{margin-top:20px;display:none;}
+.progress-label{
+  font-family:'Share Tech Mono',monospace;font-size:.75rem;
+  color:var(--cyan);margin-bottom:8px;display:flex;justify-content:space-between;
+}
+.progress-bar{height:4px;background:#00f5ff15;border-radius:2px;overflow:hidden;}
+.progress-fill{
+  height:100%;background:linear-gradient(90deg,var(--cyan),var(--magenta));
+  width:0%;transition:width .4s ease;border-radius:2px;
+  box-shadow:0 0 10px var(--cyan);
+}
+.status-msg{
+  margin-top:8px;font-family:'Share Tech Mono',monospace;font-size:.7rem;
+  color:#556680;min-height:16px;
+}
+
+/* -------- RESULTS PANEL -------- */
+.results-area{display:none;}
+.results-area.visible{display:block;animation:fadeIn .5s ease;}
+
+/* video player */
+.video-wrap{
+  background:#000;border:1px solid #00f5ff33;border-radius:4px;overflow:hidden;
+  position:relative;
+}
+.video-wrap video{width:100%;display:block;max-height:420px;object-fit:contain;}
+.video-label{
+  position:absolute;top:12px;left:12px;
+  font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:2px;
+  background:#000000aa;padding:4px 10px;border:1px solid #00f5ff44;color:var(--cyan);
+  border-radius:2px;
+}
+
+/* -------- STAT CARDS -------- */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:16px;}
+.stat-card{
+  background:var(--panel2);border:1px solid #00f5ff22;border-radius:4px;padding:16px;
+  text-align:center;transition:all .3s;
+}
+.stat-card:hover{border-color:var(--cyan);box-shadow:var(--glow-cyan);}
+.stat-value{
+  font-family:'Orbitron',sans-serif;font-size:1.6rem;font-weight:700;
+  color:var(--cyan);text-shadow:var(--glow-cyan);
+}
+.stat-label{font-size:.7rem;color:#556680;letter-spacing:2px;margin-top:4px;}
+.stat-card.risk-low .stat-value{color:var(--green);text-shadow:var(--glow-green);}
+.stat-card.risk-mod .stat-value{color:var(--yellow);text-shadow:0 0 8px var(--yellow);}
+.stat-card.risk-high .stat-value{color:var(--red);text-shadow:0 0 8px var(--red);}
+
+/* -------- ICC BADGE -------- */
+.icc-badge{
+  display:inline-flex;align-items:center;gap:8px;padding:8px 18px;
+  font-family:'Orbitron',sans-serif;font-size:.85rem;letter-spacing:2px;
+  border-radius:4px;font-weight:700;
+}
+.icc-legal{background:#00ff4115;border:2px solid var(--green);color:var(--green);box-shadow:var(--glow-green);}
+.icc-illegal{background:#ff1a1a15;border:2px solid var(--red);color:var(--red);box-shadow:0 0 8px #ff1a1a;}
+
+/* -------- DELIVERIES TABLE -------- */
+.deliveries-table{width:100%;border-collapse:collapse;margin-top:12px;font-family:'Share Tech Mono',monospace;font-size:.8rem;}
+.deliveries-table th{
+  padding:10px;text-align:left;border-bottom:1px solid #00f5ff33;
+  color:var(--cyan);letter-spacing:2px;font-weight:400;
+}
+.deliveries-table td{padding:10px;border-bottom:1px solid #ffffff08;color:#a0b0cc;}
+.deliveries-table tr:hover td{background:#00f5ff05;}
+.legal-tag{color:var(--green);}
+.illegal-tag{color:var(--red);}
+.risk-tag-low{color:var(--green);}
+.risk-tag-mod{color:var(--yellow);}
+.risk-tag-high{color:var(--red);}
+
+/* -------- GRAPHS GRID -------- */
+.graphs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:16px;}
+.graph-card{
+  background:var(--panel2);border:1px solid #00f5ff22;border-radius:4px;overflow:hidden;
+  transition:all .3s;cursor:pointer;
+}
+.graph-card:hover{border-color:var(--cyan);box-shadow:var(--glow-cyan);transform:scale(1.01);}
+.graph-card img{width:100%;display:block;}
+.graph-card-title{
+  padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:.7rem;
+  letter-spacing:2px;color:var(--cyan);border-top:1px solid #00f5ff22;
+}
+
+/* -------- RISK FACTORS -------- */
+.risk-list{list-style:none;margin-top:12px;}
+.risk-item{
+  display:flex;align-items:flex-start;gap:10px;padding:10px;
+  border-left:3px solid transparent;margin-bottom:6px;
+  background:var(--panel2);border-radius:0 4px 4px 0;
+}
+.risk-item.critical{border-color:var(--red);}
+.risk-item.high{border-color:#ff6600;}
+.risk-item.medium{border-color:var(--yellow);}
+.risk-item.low{border-color:var(--green);}
+.risk-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.risk-item.critical .risk-dot{background:var(--red);}
+.risk-item.high .risk-dot{background:#ff6600;}
+.risk-item.medium .risk-dot{background:var(--yellow);}
+.risk-item.low .risk-dot{background:var(--green);}
+.risk-name{font-weight:600;color:#ccd6f6;font-size:.85rem;}
+.risk-reason{font-size:.75rem;color:#556680;margin-top:2px;}
+
+/* -------- ERROR -------- */
+.error-box{
+  background:#ff1a1a10;border:1px solid var(--red);border-radius:4px;
+  padding:16px;color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.8rem;
+  margin-top:12px;
+}
+
+/* -------- PHASE PHASES TABLE -------- */
+.phase-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;}
+.phase-card{
+  background:var(--panel2);border:1px solid #ffffff11;border-radius:4px;padding:12px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.phase-name{font-size:.75rem;letter-spacing:1px;color:#8899bb;}
+.phase-score{font-family:'Orbitron',sans-serif;font-size:1rem;font-weight:700;}
+
+/* -------- LIGHTBOX -------- */
+.lightbox{
+  display:none;position:fixed;inset:0;background:#000000ee;z-index:10000;
+  align-items:center;justify-content:center;
+}
+.lightbox.open{display:flex;}
+.lightbox img{max-width:90vw;max-height:90vh;border:1px solid #00f5ff44;border-radius:4px;}
+.lightbox-close{
+  position:absolute;top:20px;right:30px;font-size:2rem;color:var(--cyan);
+  cursor:pointer;font-family:'Orbitron',sans-serif;
+}
+
+/* -------- FOOTER -------- */
+footer{
+  text-align:center;padding:24px;border-top:1px solid #00f5ff11;
+  font-family:'Share Tech Mono',monospace;font-size:.7rem;color:#33445566;letter-spacing:2px;
+}
+.footer-divider{display:inline-block;margin:0 12px;color:#00f5ff33;}
+
+/* -------- PULSE ANIM -------- */
+.pulse{animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+/* -------- SCROLL BAR -------- */
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:#04050d;}
+::-webkit-scrollbar-thumb{background:#00f5ff33;border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:#00f5ff66;}
+
+/* -------- BIG DOWNLOAD BUTTON -------- */
+.download-btn-big{
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:28px 20px;
+  background:linear-gradient(135deg,#00f5ff0d,#ff007f0a);
+  border:1px solid #00f5ff44;border-radius:4px;
+  text-decoration:none;cursor:pointer;
+  transition:all .35s;position:relative;overflow:hidden;
+  clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);
+}
+.download-btn-big::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(0,245,255,.12),transparent);
+  transform:translateX(-100%);transition:transform .55s;
+}
+.download-btn-big:hover::before{transform:translateX(100%);}
+.download-btn-big:hover{
+  border-color:var(--cyan);
+  background:linear-gradient(135deg,#00f5ff20,#ff007f18);
+  box-shadow:var(--glow-cyan),inset 0 0 30px rgba(0,245,255,.04);
+}
+.dl-icon{font-size:2.2rem;line-height:1;}
+.dl-text{
+  font-family:'Orbitron',sans-serif;font-size:1rem;letter-spacing:4px;
+  color:var(--cyan);font-weight:700;
+  text-shadow:var(--glow-cyan);
+}
+.download-btn-big:hover .dl-text{filter:brightness(1.3);}
+.dl-sub{
+  font-family:'Share Tech Mono',monospace;font-size:.72rem;
+  letter-spacing:2px;color:#556680;
+}
+
+/* -------- SUGGESTIONS PANEL -------- */
+.suggestion-block {
+  border:1px solid #00f5ff22;border-radius:4px;margin-bottom:14px;overflow:hidden;
+  transition:border-color .3s;
+}
+.suggestion-block:hover{border-color:#00f5ff55;}
+.suggestion-header {
+  display:flex;align-items:center;gap:10px;padding:14px 16px;
+  background:linear-gradient(90deg,#0d112822,#00f5ff08);
+  cursor:pointer;user-select:none;
+}
+.suggestion-header:hover{background:linear-gradient(90deg,#0d112844,#00f5ff12);}
+.sug-icon{font-size:1.4rem;flex-shrink:0;}
+.sug-title-wrap{flex:1;}
+.sug-injury{
+  font-family:'Orbitron',sans-serif;font-size:.78rem;letter-spacing:2px;
+  color:#ccd6f6;font-weight:600;
+}
+.sug-meta{font-size:.7rem;color:#556680;margin-top:2px;letter-spacing:1px;}
+.sug-badge{
+  font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:1px;
+  padding:3px 10px;border-radius:2px;flex-shrink:0;
+}
+.sug-badge.critical{background:#ff1a1a18;border:1px solid var(--red);color:var(--red);}
+.sug-badge.high{background:#ff660018;border:1px solid #ff6600;color:#ff6600;}
+.sug-badge.medium{background:#ffe60018;border:1px solid var(--yellow);color:var(--yellow);}
+.sug-badge.low{background:#00ff4118;border:1px solid var(--green);color:var(--green);}
+.sug-chevron{
+  font-size:.7rem;color:#556680;transition:transform .3s;
+  font-family:'Share Tech Mono',monospace;
+}
+.suggestion-block.open .sug-chevron{transform:rotate(180deg);}
+.suggestion-body{
+  display:none;padding:0 16px 16px;border-top:1px solid #00f5ff11;
+}
+.suggestion-block.open .suggestion-body{display:block;}
+.sug-reason{
+  font-family:'Share Tech Mono',monospace;font-size:.72rem;color:#8899bb;
+  margin:12px 0 10px;padding:8px 10px;background:#00f5ff06;
+  border-left:2px solid #00f5ff33;border-radius:0 2px 2px 0;line-height:1.6;
+}
+.sug-list{list-style:none;padding:0;margin:0;}
+.sug-list li{
+  display:flex;gap:10px;padding:8px 0;
+  border-bottom:1px solid #ffffff06;font-size:.82rem;color:#a0b8d0;line-height:1.5;
+}
+.sug-list li:last-child{border-bottom:none;}
+.sug-list li::before{
+  content:'▸';color:var(--cyan);flex-shrink:0;margin-top:1px;
+  font-size:.7rem;
+}
+.sug-urgent{
+  background:#ff1a1a10;border:1px solid #ff1a1a44;border-radius:3px;
+  padding:10px 12px;margin-bottom:10px;
+  font-family:'Share Tech Mono',monospace;font-size:.75rem;
+  color:var(--red);letter-spacing:1px;line-height:1.5;
+}
+.sug-empty{
+  padding:20px;text-align:center;font-family:'Share Tech Mono',monospace;
+  font-size:.8rem;color:#556680;letter-spacing:2px;
+}
+
+/* ================================================================
+   AI CHAT PANEL  — purely additive, no existing styles changed
+   ================================================================ */
+.chat-panel { display: none; }   /* hidden until results arrive */
+.chat-panel.chat-visible { display: block; }
+
+.chat-key-row {
+  display: flex; gap: 10px; margin-bottom: 14px;
+}
+.chat-api-input {
+  flex: 1; background: #060a18; border: 1px solid #00f5ff33;
+  border-radius: 3px; padding: 10px 14px;
+  font-family: 'Share Tech Mono', monospace; font-size: .78rem;
+  color: #a0c0e0; letter-spacing: 1px; outline: none;
+  transition: border-color .3s;
+}
+.chat-api-input:focus { border-color: var(--cyan); }
+.chat-api-input::placeholder { color: #446; }
+.chat-api-save {
+  background: transparent; border: 1px solid var(--cyan);
+  color: var(--cyan); font-family: 'Orbitron', sans-serif;
+  font-size: .7rem; letter-spacing: 2px; padding: 0 18px;
+  border-radius: 3px; cursor: pointer; white-space: nowrap;
+  clip-path: polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%);
+  transition: all .3s;
+}
+.chat-api-save:hover { background: var(--cyan); color: #04050d; box-shadow: var(--glow-cyan); }
+.chat-ready-badge {
+  font-family: 'Share Tech Mono', monospace; font-size: .75rem;
+  color: var(--green); letter-spacing: 1px; margin-bottom: 12px;
+  padding: 8px 12px; border: 1px solid #00ff4133;
+  background: #00ff4108; border-radius: 3px;
+}
+.chat-suggestions-row {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+}
+.chat-q-chip {
+  background: transparent; border: 1px solid #00f5ff22;
+  color: #6688aa; font-family: 'Share Tech Mono', monospace;
+  font-size: .7rem; letter-spacing: 1px; padding: 6px 12px;
+  border-radius: 2px; cursor: pointer; transition: all .25s;
+}
+.chat-q-chip:hover {
+  border-color: var(--cyan); color: var(--cyan);
+  background: #00f5ff08; box-shadow: 0 0 8px #00f5ff22;
+}
+.chat-q-chip:disabled { opacity: .35; cursor: not-allowed; }
+.chat-messages {
+  min-height: 80px; max-height: 420px; overflow-y: auto;
+  margin-bottom: 14px; display: flex; flex-direction: column; gap: 12px;
+  scrollbar-width: thin; scrollbar-color: #00f5ff33 transparent;
+}
+.chat-messages:empty::before {
+  content: 'Analysis results will be sent as context — ask anything about your form, risks, or drills.';
+  color: #334455; font-family: 'Share Tech Mono', monospace;
+  font-size: .72rem; letter-spacing: 1px; padding: 16px 0;
+}
+.chat-msg {
+  display: flex; gap: 10px; align-items: flex-start;
+  animation: msgFadeIn .3s ease;
+}
+@keyframes msgFadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+.chat-msg.user { flex-direction: row-reverse; }
+.chat-avatar {
+  width: 32px; height: 32px; border-radius: 2px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .85rem;
+  clip-path: polygon(4px 0,100% 0,calc(100% - 4px) 100%,0 100%);
+}
+.chat-msg.user .chat-avatar { background: #ff007f22; border: 1px solid #ff007f44; }
+.chat-msg.ai   .chat-avatar { background: #00f5ff18; border: 1px solid #00f5ff44; }
+.chat-bubble {
+  max-width: 80%; padding: 10px 14px; border-radius: 3px;
+  font-size: .82rem; line-height: 1.6; color: #c0d4e8;
+}
+.chat-msg.user .chat-bubble {
+  background: #ff007f0d; border: 1px solid #ff007f22;
+  font-family: 'Share Tech Mono', monospace; font-size: .78rem; color: #e0b8c8;
+}
+.chat-msg.ai .chat-bubble {
+  background: #00f5ff08; border: 1px solid #00f5ff1a;
+}
+.chat-bubble strong { color: var(--cyan); font-weight: 600; }
+.chat-bubble em { color: #8ab4d0; }
+.chat-typing {
+  display: flex; gap: 4px; align-items: center;
+  padding: 10px 14px;
+}
+.chat-typing span {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--cyan); opacity: .4;
+  animation: typingPulse 1.2s infinite;
+}
+.chat-typing span:nth-child(2) { animation-delay: .2s; }
+.chat-typing span:nth-child(3) { animation-delay: .4s; }
+@keyframes typingPulse {
+  0%,60%,100% { opacity:.4; transform:scale(1); }
+  30% { opacity:1; transform:scale(1.3); }
+}
+.chat-input-row {
+  display: flex; gap: 10px;
+}
+.chat-input {
+  flex: 1; background: #060a18; border: 1px solid #00f5ff22;
+  border-radius: 3px; padding: 11px 14px;
+  font-family: 'Share Tech Mono', monospace; font-size: .8rem;
+  color: #a0c0e0; letter-spacing: 1px; outline: none;
+  transition: border-color .3s;
+}
+.chat-input:focus { border-color: var(--cyan); }
+.chat-input:disabled { opacity: .4; cursor: not-allowed; }
+.chat-input::placeholder { color: #334; }
+.chat-send-btn {
+  background: transparent;
+  border: 1px solid #00f5ff44; color: var(--cyan);
+  font-family: 'Orbitron', sans-serif; font-size: .68rem;
+  letter-spacing: 2px; padding: 0 20px;
+  border-radius: 3px; cursor: pointer; white-space: nowrap;
+  clip-path: polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%);
+  transition: all .3s;
+}
+.chat-send-btn:hover:not(:disabled) {
+  background: var(--cyan); color: #04050d; box-shadow: var(--glow-cyan);
+}
+.chat-send-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+</style>
+</head>
+<body>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <span class="lightbox-close">✕</span>
+  <img id="lightbox-img" src="" alt="Graph"/>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="corner corner-tl"></div>
+  <div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div>
+  <div class="corner corner-br"></div>
+  <div class="header-badge">⚡ COMPUTER VISION BIOMECHANICS ENGINE ⚡</div>
+  <div class="title">🤖 AI POWERED SPORTS<br>INJURY PREDICTOR</div>
+  <div class="subtitle">REAL-TIME BIOMECHANICS ANALYSIS SYSTEM</div>
+  <div class="team-tag">PRESENTED BY <span>⚡ TEAM SPJURY ⚡</span></div>
+</header>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('bowling')">
+    <span class="tab-emoji">🏏</span>BOWLING
+  </button>
+  <button class="tab-btn" onclick="switchTab('batting')">
+    <span class="tab-emoji">🏏</span>BATTING
+  </button>
+  <button class="tab-btn" onclick="switchTab('tennis')">
+    <span class="tab-emoji">🎾</span>TENNIS
+  </button>
+</div>
+
+<div class="main">
+
+<!-- ===== BOWLING TAB ===== -->
+<div class="tab-content active" id="tab-bowling">
+  <div class="two-col">
+    <!-- Upload Panel -->
+    <div>
+      <div class="panel">
+        <div class="panel-title">🏏 BOWLING ANALYSIS</div>
+
+        <div class="upload-zone" id="upload-bowling" ondrop="handleDrop(event,'bowling')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'bowling')">
+          <input type="file" id="file-bowling" accept="video/*" onchange="onFileSelect('bowling')"/>
+          <span class="upload-icon">📁</span>
+          <div class="upload-text">DROP VIDEO OR CLICK TO UPLOAD</div>
+          <div class="upload-sub">MP4 · AVI · MOV · MKV</div>
+          <div class="file-name" id="filename-bowling"></div>
+        </div>
+
+        <button class="analyze-btn" id="btn-bowling" onclick="startAnalysis('bowling')" disabled>
+          ⚡ INITIATE BOWLING ANALYSIS ⚡
+        </button>
+
+        <div class="progress-wrap" id="progress-bowling">
+          <div class="progress-label">
+            <span>⚙ PROCESSING...</span><span id="pct-bowling">0%</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" id="fill-bowling"></div></div>
+          <div class="status-msg pulse" id="msg-bowling">Initializing analysis engine...</div>
+        </div>
+        <div class="error-box" id="err-bowling" style="display:none;"></div>
+      </div>
+
+      <!-- Info Card -->
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">📋 DETECTION FEATURES</div>
+        <div style="font-size:.82rem;color:#8899bb;line-height:1.8;">
+          ⚡ 8-Phase Bowling Detection<br>
+          🦴 Elbow Extension Tracking<br>
+          🏛 ICC 15° Legality Check<br>
+          ⚠ Phase-by-Phase Risk Analysis<br>
+          🎯 Front-On / Side-On Classification<br>
+          🔄 Per-Delivery Comparison Charts<br>
+          🦵 Landing Impact Assessment<br>
+          🔬 Rotator Cuff & Shoulder Risk
+        </div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="results-area" id="results-bowling">
+
+
+      <!-- ICC + Stats -->
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">🏛 ICC LEGALITY VERDICT</div>
+        <div id="icc-verdict" style="margin-bottom:16px;"></div>
+        <div class="stats-grid" id="bowling-stats"></div>
+      </div>
+
+      <!-- Deliveries Table -->
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">📊 DELIVERY BREAKDOWN</div>
+        <div style="overflow-x:auto;">
+          <table class="deliveries-table" id="deliveries-table">
+            <thead>
+              <tr>
+                <th>#</th><th>ACTION</th><th>TYPE</th>
+                <th>ELBOW EXT</th><th>ICC STATUS</th>
+                <th>RISK SCORE</th>
+              </tr>
+            </thead>
+            <tbody id="deliveries-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+
+      <!-- Suggestions -->
+      <div class="panel" style="margin-top:16px;" id="panel-suggestions-bowling">
+        <div class="panel-title">💡 INJURY REDUCTION SUGGESTIONS</div>
+        <div id="bowling-suggestions"></div>
+      </div>
+
+      <!-- Graphs -->
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">📈 BIOMECHANICS GRAPHS</div>
+        <div class="graphs-grid" id="graphs-bowling"></div>
+      </div>
+
+      <!-- ===== AI CHAT PANEL — BOWLING ===== -->
+      <div class="panel chat-panel" style="margin-top:24px;" id="chat-panel-bowling">
+        <div class="panel-title">🤖 ASK AI ABOUT YOUR BOWLING ANALYSIS</div>
+        <div class="chat-key-row" id="chat-key-row-bowling">
+          <input type="password" class="chat-api-input" id="chat-apikey-bowling"
+            placeholder="Paste free Groq API key (gsk_...) — get it at console.groq.com"
+            autocomplete="off"/>
+          <button class="chat-api-save" onclick="connectGroq('bowling')">CONNECT</button>
+        </div>
+        <div class="chat-ready-badge" id="chat-ready-bowling" style="display:none">
+          ✅ Groq connected — ask anything about your analysis
+        </div>
+        <div class="chat-suggestions-row" id="chat-qs-bowling">
+          <button class="chat-q-chip" onclick="askChip('bowling', this)">What is my biggest injury risk?</button>
+          <button class="chat-q-chip" onclick="askChip('bowling', this)">Explain my risk score in simple terms</button>
+          <button class="chat-q-chip" onclick="askChip('bowling', this)">What drills should I do this week?</button>
+          <button class="chat-q-chip" onclick="askChip('bowling', this)">Am I at risk of a serious injury?</button>
+        </div>
+        <div class="chat-messages" id="chat-messages-bowling"></div>
+        <div class="chat-input-row">
+          <input
+            type="text"
+            class="chat-input"
+            id="chat-input-bowling"
+            placeholder="Type your question about your bowling form..."
+            onkeydown="if(event.key==='Enter')sendChat('bowling')"
+            disabled
+          />
+          <button class="chat-send-btn" id="chat-send-bowling" onclick="sendChat('bowling')" disabled>SEND ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== BATTING TAB ===== -->
+<div class="tab-content" id="tab-batting">
+  <div class="two-col">
+    <div>
+      <div class="panel">
+        <div class="panel-title">🏏 BATTING ANALYSIS</div>
+        <div class="upload-zone" id="upload-batting" ondrop="handleDrop(event,'batting')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'batting')">
+          <input type="file" id="file-batting" accept="video/*" onchange="onFileSelect('batting')"/>
+          <span class="upload-icon">📁</span>
+          <div class="upload-text">DROP VIDEO OR CLICK TO UPLOAD</div>
+          <div class="upload-sub">MP4 · AVI · MOV · MKV</div>
+          <div class="file-name" id="filename-batting"></div>
+        </div>
+        <button class="analyze-btn" id="btn-batting" onclick="startAnalysis('batting')" disabled>
+          ⚡ INITIATE BATTING ANALYSIS ⚡
+        </button>
+        <div class="progress-wrap" id="progress-batting">
+          <div class="progress-label">
+            <span>⚙ PROCESSING...</span><span id="pct-batting">0%</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" id="fill-batting"></div></div>
+          <div class="status-msg pulse" id="msg-batting">Initializing analysis engine...</div>
+        </div>
+        <div class="error-box" id="err-batting" style="display:none;"></div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">📋 DETECTION FEATURES</div>
+        <div style="font-size:.82rem;color:#8899bb;line-height:1.8;">
+          🤖 Auto-Detect Batting vs Bowling<br>
+          ⚖ Weight Transfer Analysis<br>
+          🦵 Knee Angle Monitoring<br>
+          🦴 Hip Angle Tracking<br>
+          ⚠ Real-time Injury Risk Scoring<br>
+          📊 Front / Back Foot Distribution<br>
+          🔄 Balance Imbalance Detection<br>
+          📉 Risk Timeline Visualization
+        </div>
+      </div>
+    </div>
+
+    <div class="results-area" id="results-batting">
+
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">📊 BATTING METRICS</div>
+        <div id="activity-detected" style="margin-bottom:12px;"></div>
+        <div class="stats-grid" id="batting-stats"></div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">⚠ INJURY RISK FACTORS</div>
+        <ul class="risk-list" id="batting-risks"></ul>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">📈 BIOMECHANICS GRAPHS</div>
+        <div class="graphs-grid" id="graphs-batting"></div>
+      </div>
+
+      <!-- ===== AI CHAT PANEL — BATTING ===== -->
+      <div class="panel chat-panel" style="margin-top:24px;" id="chat-panel-batting">
+        <div class="panel-title">🤖 ASK AI ABOUT YOUR BATTING ANALYSIS</div>
+        <div class="chat-key-row" id="chat-key-row-batting">
+          <input type="password" class="chat-api-input" id="chat-apikey-batting"
+            placeholder="Paste free Groq API key (gsk_...) — get it at console.groq.com"
+            autocomplete="off"/>
+          <button class="chat-api-save" onclick="connectGroq('batting')">CONNECT</button>
+        </div>
+        <div class="chat-ready-badge" id="chat-ready-batting" style="display:none">
+          ✅ Groq connected — ask anything about your analysis
+        </div>
+        <div class="chat-suggestions-row" id="chat-qs-batting">
+          <button class="chat-q-chip" onclick="askChip('batting', this)">What is my biggest injury risk?</button>
+          <button class="chat-q-chip" onclick="askChip('batting', this)">Explain my risk score in simple terms</button>
+          <button class="chat-q-chip" onclick="askChip('batting', this)">What drills should I do this week?</button>
+          <button class="chat-q-chip" onclick="askChip('batting', this)">Am I at risk of a serious injury?</button>
+        </div>
+        <div class="chat-messages" id="chat-messages-batting"></div>
+        <div class="chat-input-row">
+          <input
+            type="text"
+            class="chat-input"
+            id="chat-input-batting"
+            placeholder="Type your question about your batting form..."
+            onkeydown="if(event.key==='Enter')sendChat('batting')"
+            disabled
+          />
+          <button class="chat-send-btn" id="chat-send-batting" onclick="sendChat('batting')" disabled>SEND ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TENNIS TAB ===== -->
+<div class="tab-content" id="tab-tennis">
+  <div class="two-col">
+    <div>
+      <div class="panel">
+        <div class="panel-title">🎾 TENNIS ANALYSIS</div>
+        <div class="upload-zone" id="upload-tennis" ondrop="handleDrop(event,'tennis')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event,'tennis')">
+          <input type="file" id="file-tennis" accept="video/*" onchange="onFileSelect('tennis')"/>
+          <span class="upload-icon">📁</span>
+          <div class="upload-text">DROP VIDEO OR CLICK TO UPLOAD</div>
+          <div class="upload-sub">MP4 · AVI · MOV · MKV</div>
+          <div class="file-name" id="filename-tennis"></div>
+        </div>
+        <button class="analyze-btn" id="btn-tennis" onclick="startAnalysis('tennis')" disabled>
+          ⚡ INITIATE TENNIS ANALYSIS ⚡
+        </button>
+        <div class="progress-wrap" id="progress-tennis">
+          <div class="progress-label">
+            <span>⚙ PROCESSING...</span><span id="pct-tennis">0%</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" id="fill-tennis"></div></div>
+          <div class="status-msg pulse" id="msg-tennis">Initializing analysis engine...</div>
+        </div>
+        <div class="error-box" id="err-tennis" style="display:none;"></div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">📋 DETECTION FEATURES</div>
+        <div style="font-size:.82rem;color:#8899bb;line-height:1.8;">
+          🎾 Shoulder Abduction Tracking<br>
+          💪 Elbow Flexion & Velocity<br>
+          🦵 Knee Flexion Monitoring<br>
+          🔄 Trunk Lateral Tilt Analysis<br>
+          ↔ Hip-Shoulder Separation<br>
+          ⚡ Angular Velocity Calculation<br>
+          📊 Real-time In-Video Graphs<br>
+          🏥 Multi-factor Risk Scoring
+        </div>
+      </div>
+    </div>
+
+    <div class="results-area" id="results-tennis">
+
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">📊 TENNIS RISK SUMMARY</div>
+        <div class="stats-grid" id="tennis-stats"></div>
+      </div>
+
+      <!-- Tennis Suggestions -->
+      <div class="panel" style="margin-top:16px;" id="panel-suggestions-tennis">
+        <div class="panel-title">💡 INJURY REDUCTION SUGGESTIONS</div>
+        <div id="tennis-suggestions"></div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">📈 BIOMECHANICS GRAPHS</div>
+        <div class="graphs-grid" id="graphs-tennis"></div>
+      </div>
+
+      <!-- ===== AI CHAT PANEL — TENNIS ===== -->
+      <div class="panel chat-panel" style="margin-top:24px;" id="chat-panel-tennis">
+        <div class="panel-title">🤖 ASK AI ABOUT YOUR TENNIS ANALYSIS</div>
+        <div class="chat-key-row" id="chat-key-row-tennis">
+          <input type="password" class="chat-api-input" id="chat-apikey-tennis"
+            placeholder="Paste free Groq API key (gsk_...) — get it at console.groq.com"
+            autocomplete="off"/>
+          <button class="chat-api-save" onclick="connectGroq('tennis')">CONNECT</button>
+        </div>
+        <div class="chat-ready-badge" id="chat-ready-tennis" style="display:none">
+          ✅ Groq connected — ask anything about your analysis
+        </div>
+        <div class="chat-suggestions-row" id="chat-qs-tennis">
+          <button class="chat-q-chip" onclick="askChip('tennis', this)">What is my biggest injury risk?</button>
+          <button class="chat-q-chip" onclick="askChip('tennis', this)">Explain my risk score in simple terms</button>
+          <button class="chat-q-chip" onclick="askChip('tennis', this)">What drills should I do this week?</button>
+          <button class="chat-q-chip" onclick="askChip('tennis', this)">Am I at risk of a serious injury?</button>
+        </div>
+        <div class="chat-messages" id="chat-messages-tennis"></div>
+        <div class="chat-input-row">
+          <input
+            type="text"
+            class="chat-input"
+            id="chat-input-tennis"
+            placeholder="Type your question about your tennis form..."
+            onkeydown="if(event.key==='Enter')sendChat('tennis')"
+            disabled
+          />
+          <button class="chat-send-btn" id="chat-send-tennis" onclick="sendChat('tennis')" disabled>SEND ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<footer>
+  <span>⚡ SPJURY</span>
+  <span class="footer-divider">///</span>
+  <span>AI SPORTS INJURY PREDICTOR</span>
+  <span class="footer-divider">///</span>
+  <span>TEAM SPJURY © 2025</span>
+</footer>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+  bowling: { file: null, taskId: null, polling: null },
+  batting: { file: null, taskId: null, polling: null },
+  tennis:  { file: null, taskId: null, polling: null }
+};
+
+// ============================================================
+// TABS
+// ============================================================
+function switchTab(sport) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    b.classList.toggle('active', ['bowling','batting','tennis'][i] === sport);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => {
+    c.classList.toggle('active', c.id === `tab-${sport}`);
+  });
+}
+
+// ============================================================
+// DRAG & DROP
+// ============================================================
+function handleDragOver(e) { e.preventDefault(); }
+function handleDragLeave(e, sport) { document.getElementById(`upload-${sport}`).classList.remove('dragging'); }
+function handleDrop(e, sport) {
+  e.preventDefault();
+  document.getElementById(`upload-${sport}`).classList.remove('dragging');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('video/')) {
+    state[sport].file = file;
+    document.getElementById(`filename-${sport}`).textContent = `📹 ${file.name}`;
+    document.getElementById(`btn-${sport}`).disabled = false;
+  }
+}
+
+function onFileSelect(sport) {
+  const input = document.getElementById(`file-${sport}`);
+  if (input.files[0]) {
+    state[sport].file = input.files[0];
+    document.getElementById(`filename-${sport}`).textContent = `📹 ${input.files[0].name}`;
+    document.getElementById(`btn-${sport}`).disabled = false;
+  }
+}
+
+// ============================================================
+// ANALYSIS
+// ============================================================
+async function startAnalysis(sport) {
+  const file = state[sport].file;
+  if (!file) return;
+
+  const btn = document.getElementById(`btn-${sport}`);
+  const progressWrap = document.getElementById(`progress-${sport}`);
+  const errBox = document.getElementById(`err-${sport}`);
+  const resultsArea = document.getElementById(`results-${sport}`);
+
+  btn.disabled = true;
+  errBox.style.display = 'none';
+  resultsArea.classList.remove('visible');
+  progressWrap.style.display = 'block';
+  setProgress(sport, 0, 'Uploading video...');
+
+  const formData = new FormData();
+  formData.append('sport', sport);
+  formData.append('video', file);
+
+  try {
+    const res = await fetch('/api/analyze', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Upload failed');
+
+    state[sport].taskId = data.task_id;
+    pollStatus(sport, data.task_id);
+  } catch (e) {
+    showError(sport, e.message);
+    btn.disabled = false;
+  }
+}
+
+function pollStatus(sport, taskId) {
+  if (state[sport].polling) clearInterval(state[sport].polling);
+  state[sport].polling = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/status/${taskId}`);
+      const data = await res.json();
+
+      setProgress(sport, data.progress, getStatusMsg(data.progress));
+
+      if (data.status === 'complete') {
+        clearInterval(state[sport].polling);
+        setProgress(sport, 100, '✅ Analysis complete!');
+        setTimeout(() => fetchResults(sport, taskId), 600);
+      } else if (data.status === 'error') {
+        clearInterval(state[sport].polling);
+        showError(sport, data.error || 'Analysis failed');
+        document.getElementById(`btn-${sport}`).disabled = false;
+      }
+    } catch (e) {
+      // network glitch, keep polling
+    }
+  }, 1500);
+}
+
+function getStatusMsg(p) {
+  if (p < 10) return '🔄 Loading video & initializing MediaPipe...';
+  if (p < 30) return '🦴 Detecting pose landmarks...';
+  if (p < 60) return '⚡ Analyzing biomechanics...';
+  if (p < 80) return '📊 Computing injury risk scores...';
+  if (p < 93) return '📈 Generating visualizations...';
+  if (p < 99) return '🎬 Re-encoding video for browser playback...';
+  return '✅ Finalizing results...';
+}
+
+async function fetchResults(sport, taskId) {
+  try {
+    const res = await fetch(`/api/results/${taskId}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to fetch results');
+    renderResults(sport, data);
+  } catch (e) {
+    showError(sport, e.message);
+  }
+}
+
+// ============================================================
+// RENDER RESULTS
+// ============================================================
+function renderResults(sport, data) {
+  const resultsArea = document.getElementById(`results-${sport}`);
+  resultsArea.classList.add('visible');
+  document.getElementById(`progress-${sport}`).style.display = 'none';
+  document.getElementById(`btn-${sport}`).disabled = false;
+
+  // Download button — injected at the top of the results area
+  const resultsEl = document.getElementById(`results-${sport}`);
+  const existingDl = resultsEl.querySelector('.video-download-panel');
+  if (existingDl) existingDl.remove();
+  const dlPanel = document.createElement('div');
+  dlPanel.className = 'panel video-download-panel';
+  dlPanel.style.marginBottom = '0';
+  dlPanel.innerHTML = `
+    <div class="panel-title">🎬 ANNOTATED OUTPUT VIDEO</div>
+    <a class="download-btn-big" href="${data.video_url}" download target="_blank">
+      <span class="dl-icon">⬇</span>
+      <span class="dl-text">DOWNLOAD ANNOTATED VIDEO</span>
+      <span class="dl-sub">H.264 MP4 &nbsp;·&nbsp; AI Pose Overlay &nbsp;·&nbsp; Biomechanics Annotations</span>
+    </a>
+  `;
+  resultsEl.insertBefore(dlPanel, resultsEl.firstChild);
+
+  // Render graphs
+  renderGraphs(sport, data.graphs || []);
+
+  if (sport === 'bowling') renderBowling(data);
+  if (sport === 'batting') renderBatting(data);
+  if (sport === 'tennis')  renderTennis(data);
+}
+
+function renderGraphs(sport, graphs) {
+  const container = document.getElementById(`graphs-${sport}`);
+  container.innerHTML = '';
+  graphs.forEach(g => {
+    const card = document.createElement('div');
+    card.className = 'graph-card';
+    card.innerHTML = `
+      <img src="${g.url}?t=${Date.now()}" alt="${g.name}" onclick="openLightbox('${g.url}')"/>
+      <div class="graph-card-title">📊 ${g.name}</div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+// ---------- BOWLING ----------
+function renderBowling(data) {
+  const deliveries = data.deliveries || [];
+  const report = data.injury_report || {};
+
+  // Overall ICC verdict
+  const iccEl = document.getElementById('icc-verdict');
+  const anyIllegal = deliveries.some(d => d.legality === 'ILLEGAL');
+  const illegalCount = deliveries.filter(d => d.legality === 'ILLEGAL').length;
+  if (deliveries.length === 0) {
+    iccEl.innerHTML = `<span style="color:#556680;font-family:'Share Tech Mono',monospace;font-size:.8rem;">⚠ No deliveries detected in this video</span>`;
+  } else if (anyIllegal) {
+    iccEl.innerHTML = `<div class="icc-badge icc-illegal">🚫 ${illegalCount} ILLEGAL DELIVERY${illegalCount>1?'S':''} DETECTED — EXCEEDS ICC 15° ELBOW RULE</div>`;
+  } else {
+    iccEl.innerHTML = `<div class="icc-badge icc-legal">✅ ALL ${deliveries.length} DELIVERIES LEGAL — WITHIN ICC 15° LIMIT</div>`;
+  }
+
+  // Stats
+  const statsEl = document.getElementById('bowling-stats');
+  const riskClass = riskToClass(report.risk_level);
+  const avgElbow = deliveries.length ? (deliveries.reduce((s,d) => s+d.max_elbow,0)/deliveries.length).toFixed(1) : 'N/A';
+  statsEl.innerHTML = `
+    <div class="stat-card ${riskClass}">
+      <div class="stat-value">${report.overall_score ?? 'N/A'}</div>
+      <div class="stat-label">OVERALL RISK /100</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color:var(--cyan)">${deliveries.length}</div>
+      <div class="stat-label">DELIVERIES</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color:${anyIllegal?'var(--red)':'var(--green)'}">${deliveries.filter(d=>d.legality==='ILLEGAL').length}</div>
+      <div class="stat-label">ILLEGAL DELIVERIES</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color:var(--yellow)">${avgElbow}°</div>
+      <div class="stat-label">AVG ELBOW EXT</div>
+    </div>
+    <div class="stat-card ${riskClass}">
+      <div class="stat-value">${report.risk_level ?? 'N/A'}</div>
+      <div class="stat-label">RISK LEVEL</div>
+    </div>
+  `;
+
+  // Deliveries table
+  const tbody = document.getElementById('deliveries-body');
+  tbody.innerHTML = '';
+  if (deliveries.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="color:#556680;text-align:center;padding:20px;">No deliveries detected</td></tr>`;
+  } else {
+    deliveries.forEach(d => {
+      const legalClass = d.legality === 'LEGAL' ? 'legal-tag' : 'illegal-tag';
+      const legalIcon = d.legality === 'LEGAL' ? '✅' : '🚫';
+      const riskScore = d.overall_injury_score ?? 0;
+      const riskCls = riskScore < 30 ? 'risk-tag-low' : riskScore < 60 ? 'risk-tag-mod' : 'risk-tag-high';
+      tbody.innerHTML += `
+        <tr>
+          <td>#${d.delivery_number}</td>
+          <td>${d.action_type||'—'}</td>
+          <td>${d.bowling_type||'—'}</td>
+          <td style="color:${d.max_elbow>15?'var(--red)':'var(--green)'}">${(d.max_elbow||0).toFixed(1)}°</td>
+          <td class="${legalClass}">${legalIcon} ${d.legality||'—'}<br><small style="color:#556680;font-size:.65rem;">${d.legality_note||''}</small></td>
+          <td class="${riskCls}">${riskScore}/100</td>
+        </tr>`;
+    });
+  }
+
+  // Suggestions
+  renderSuggestions(data.suggestions || [], 'bowling');
+
+}
+
+// ---------- BATTING ----------
+function renderBatting(data) {
+  const report = data.report;
+  const activityEl = document.getElementById('activity-detected');
+
+  activityEl.innerHTML = `<div class="icc-badge" style="background:#00f5ff10;border-color:var(--cyan);color:var(--cyan);">
+    🤖 DETECTED: ${data.activity_type || 'UNKNOWN'}
+  </div>`;
+
+  const statsEl = document.getElementById('batting-stats');
+  if (!report) {
+    statsEl.innerHTML = `<div style="color:#556680;font-family:'Share Tech Mono',monospace;font-size:.8rem;padding:12px;">No batting data — video may have been detected as bowling</div>`;
+    return;
+  }
+
+  const riskClass = riskToClass(report.risk_level);
+  statsEl.innerHTML = `
+    <div class="stat-card ${riskClass}">
+      <div class="stat-value">${report.average_risk_score}</div>
+      <div class="stat-label">RISK SCORE /100</div>
+    </div>
+    <div class="stat-card ${riskClass}">
+      <div class="stat-value">${report.risk_level}</div>
+      <div class="stat-label">RISK LEVEL</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color:var(--cyan)">${report.average_knee_angle}°</div>
+      <div class="stat-label">AVG KNEE ANGLE</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color:var(--magenta)">${report.average_hip_angle}°</div>
+      <div class="stat-label">AVG HIP ANGLE</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color:var(--green)">${report.average_front_weight}%</div>
+      <div class="stat-label">FRONT FOOT LOAD</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color:var(--yellow)">${report.average_back_weight}%</div>
+      <div class="stat-label">BACK FOOT LOAD</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color:${report.weight_balance>20?'var(--red)':'var(--green)'}">${report.weight_balance}%</div>
+      <div class="stat-label">WEIGHT IMBALANCE</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color:var(--cyan)">${report.frames_analyzed}</div>
+      <div class="stat-label">FRAMES ANALYSED</div>
+    </div>
+  `;
+
+  // Risk factors (from thresholds)
+  const riskList = document.getElementById('batting-risks');
+  riskList.innerHTML = '';
+  const risks = [];
+  if (report.average_risk_score >= 60) {
+    risks.push({type:'High Risk Detected',severity:'high',reason:`Overall risk score ${report.average_risk_score}/100`});
+  }
+  if (report.average_knee_angle < 100) {
+    risks.push({type:'Knee Joint Stress',severity:'critical',reason:`Avg knee angle ${report.average_knee_angle}° below safe threshold (100°)`});
+  } else if (report.average_knee_angle < 120) {
+    risks.push({type:'Knee Strain Risk',severity:'medium',reason:`Avg knee angle ${report.average_knee_angle}° moderately flexed`});
+  }
+  if (report.average_hip_angle < 110) {
+    risks.push({type:'Lower Back Stress',severity:'high',reason:`Avg hip angle ${report.average_hip_angle}° — excessive forward bend`});
+  } else if (report.average_hip_angle < 130) {
+    risks.push({type:'Lumbar Strain Risk',severity:'medium',reason:`Avg hip angle ${report.average_hip_angle}° shows forward lean`});
+  }
+  if (report.weight_balance > 20) {
+    risks.push({type:'Weight Imbalance',severity:'high',reason:`${report.weight_balance}% difference between foot loading`});
+  }
+  if (risks.length === 0) {
+    risks.push({type:'Low Risk',severity:'low',reason:'Biomechanics within safe thresholds — maintain good form'});
+  }
+  risks.forEach(r => {
+    riskList.innerHTML += `
+      <li class="risk-item ${r.severity}">
+        <div class="risk-dot"></div>
+        <div>
+          <div class="risk-name">${r.type}</div>
+          <div class="risk-reason">${r.reason}</div>
+        </div>
+      </li>`;
+  });
+}
+
+// ---------- TENNIS ----------
+function renderTennis(data) {
+  const summary = data.summary || {};
+  const statsEl = document.getElementById('tennis-stats');
+  const riskClass = riskToClass(summary.overall_risk);
+  statsEl.innerHTML = `
+    <div class="stat-card ${riskClass}">
+      <div class="stat-value">${summary.average_risk ?? 'N/A'}</div>
+      <div class="stat-label">AVG RISK SCORE</div>
+    </div>
+    <div class="stat-card ${riskClass}">
+      <div class="stat-value">${summary.max_risk ?? 'N/A'}</div>
+      <div class="stat-label">PEAK RISK SCORE</div>
+    </div>
+    <div class="stat-card ${riskClass}">
+      <div class="stat-value">${summary.overall_risk ?? 'N/A'}</div>
+      <div class="stat-label">RISK LEVEL</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color:var(--cyan)">${summary.total_frames ?? 'N/A'}</div>
+      <div class="stat-label">FRAMES PROCESSED</div>
+    </div>
+  `;
+
+  // Suggestions
+  renderSuggestions(data.suggestions || [], 'tennis');
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function riskToClass(level) {
+  if (!level) return '';
+  const l = level.toUpperCase();
+  if (l === 'LOW') return 'risk-low';
+  if (l === 'MODERATE') return 'risk-mod';
+  if (l === 'HIGH') return 'risk-high';
+  return '';
+}
+
+function setProgress(sport, pct, msg) {
+  document.getElementById(`fill-${sport}`).style.width = `${pct}%`;
+  document.getElementById(`pct-${sport}`).textContent = `${pct}%`;
+  if (msg) document.getElementById(`msg-${sport}`).textContent = msg;
+}
+
+function showError(sport, msg) {
+  const errBox = document.getElementById(`err-${sport}`);
+  errBox.textContent = `❌ ERROR: ${msg}`;
+  errBox.style.display = 'block';
+  document.getElementById(`progress-${sport}`).style.display = 'none';
+}
+
+function openLightbox(url) {
+  document.getElementById('lightbox-img').src = url + '?t=' + Date.now();
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+}
+
+// Keyboard ESC to close lightbox
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// ============================================================
+// RENDER BOWLING SUGGESTIONS
+// ============================================================
+function renderSuggestions(suggestions, sport) {
+  const container = document.getElementById(`${sport}-suggestions`);
+  const panel = document.getElementById(`panel-suggestions-${sport}`);
+
+  if (!suggestions || suggestions.length === 0) {
+    container.innerHTML = '<div class="sug-empty">✅ No specific injury risks detected — maintain your current technique and load management.</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+
+  suggestions.forEach((s, i) => {
+    const sevClass = s.severity.toLowerCase();
+    const sevLabel = s.severity.toUpperCase();
+    const isUrgent = s.severity === 'Critical';
+
+    // Separate urgent suggestions (URGENT: prefix) from normal ones
+    const urgentItems = s.suggestions.filter(x => x.startsWith('URGENT:'));
+    const normalItems = s.suggestions.filter(x => !x.startsWith('URGENT:'));
+
+    const reasonHtml = s.reasons.map(r => `<div>${r}</div>`).join('');
+
+    const urgentHtml = urgentItems.length
+      ? urgentItems.map(u => `<div class="sug-urgent">🚨 ${u}</div>`).join('')
+      : '';
+
+    const listHtml = normalItems.map(item => `<li>${item}</li>`).join('');
+
+    const block = document.createElement('div');
+    block.className = `suggestion-block${i === 0 ? ' open' : ''}`;
+    block.innerHTML = `
+      <div class="suggestion-header" onclick="toggleSuggestion(this)">
+        <span class="sug-icon">${s.icon}</span>
+        <div class="sug-title-wrap">
+          <div class="sug-injury">${s.injury}</div>
+          <div class="sug-meta">📍 ${s.phase} Phase &nbsp;·&nbsp; Detected ${s.occurrences}× in video</div>
+        </div>
+        <span class="sug-badge ${sevClass}">${sevLabel}</span>
+        <span class="sug-chevron">▼</span>
+      </div>
+      <div class="suggestion-body">
+        ${urgentHtml}
+        <div class="sug-reason">${reasonHtml}</div>
+        <ul class="sug-list">${listHtml}</ul>
+      </div>
+    `;
+    container.appendChild(block);
+  });
+}
+
+function toggleSuggestion(header) {
+  const block = header.closest('.suggestion-block');
+  block.classList.toggle('open');
+}
+
+
+/* ================================================================
+   AI CHAT — calls Groq directly from browser (avoids server proxy)
+   ================================================================ */
+
+const chatResults   = { bowling: null, batting: null, tennis: null };
+const chatHistories = { bowling: [],   batting: [],   tennis: []   };
+let   groqApiKey    = '';   // shared across all sport panels
+
+function connectGroq(sport) {
+  const inp = document.getElementById(`chat-apikey-${sport}`);
+  const key = inp ? inp.value.trim() : '';
+  if (!key.startsWith('gsk_') && !key.startsWith('sk-')) {
+    if (inp) { inp.style.borderColor = 'var(--red)'; setTimeout(() => inp.style.borderColor = '', 1800); }
+    return;
+  }
+  groqApiKey = key;
+  // Share across all sport panels
+  ['bowling','batting','tennis'].forEach(s => {
+    const row   = document.getElementById(`chat-key-row-${s}`);
+    const badge = document.getElementById(`chat-ready-${s}`);
+    if (row)   row.style.display   = 'none';
+    if (badge) badge.style.display = 'block';
+    if (chatResults[s]) unlockChat(s);
+  });
+}
+
+function unlockChat(sport) {
+  const inp = document.getElementById(`chat-input-${sport}`);
+  const btn = document.getElementById(`chat-send-${sport}`);
+  if (inp) inp.disabled = false;
+  if (btn) btn.disabled = false;
+}
+
+// Patch renderResults after DOM load
+window.addEventListener('DOMContentLoaded', () => {
+  const _origRR = window.renderResults;
+  window.renderResults = function(sport, data) {
+    _origRR(sport, data);
+    chatResults[sport] = data;
+    const panel = document.getElementById(`chat-panel-${sport}`);
+    if (panel) panel.classList.add('chat-visible');
+    if (groqApiKey) unlockChat(sport);
+  };
+});
+
+function askChip(sport, chipEl) {
+  const inp = document.getElementById(`chat-input-${sport}`);
+  if (inp) inp.value = chipEl.textContent.trim();
+  sendChat(sport);
+}
+
+function buildSystemPrompt(sport, data) {
+  const lines = [
+    `You are a professional sports biomechanics coach and physiotherapist specialising in ${sport}.`,
+    `The user has just had their ${sport} form analysed by an AI computer vision system.`,
+    `Answer their questions clearly using the analysis data below as context.`,
+    `Be concise, practical, and supportive. Use plain language.`,
+    ``, `=== ANALYSIS RESULTS ===`,
+  ];
+  if (!data) { lines.push('No data.'); return lines.join('\n'); }
+  if (sport === 'bowling') {
+    const ir = data.injury_report || {};
+    const dels = data.deliveries || [];
+    lines.push(`Overall risk: ${ir.overall_score ?? 'N/A'}/100, level: ${ir.risk_level ?? 'N/A'}`);
+    dels.forEach((d,i) => lines.push(`Delivery ${i+1}: ${d.action_type}, ${d.bowling_type}, elbow=${(d.max_elbow||0).toFixed(1)}°, ${d.legality}, risk=${d.overall_injury_score}`));
+    (data.suggestions||[]).forEach(s => {
+      lines.push(`\n${s.injury} [${s.severity}]: ${s.reasons.join('; ')}`);
+      s.suggestions.forEach(t => lines.push(`  • ${t}`));
+    });
+  } else if (sport === 'batting') {
+    const rep = data.report || {};
+    lines.push(`Activity: ${data.activity_type}, weight front=${rep.weight_front}%, back=${rep.weight_back}%`);
+    lines.push(`Knee=${rep.avg_knee_angle}°, hip=${rep.avg_hip_angle}°`);
+    (rep.risk_factors||[]).forEach(r => lines.push(`Risk: ${r.type} [${r.severity}] — ${r.reason}`));
+  } else if (sport === 'tennis') {
+    const sum = data.summary || {};
+    lines.push(`Avg risk: ${sum.average_risk}/100, peak: ${sum.max_risk}/100, level: ${sum.overall_risk}`);
+    (data.suggestions||[]).forEach(s => {
+      lines.push(`\n${s.factor}: ${s.injury} [${s.severity}] — ${s.reasons[0]}`);
+      s.suggestions.forEach(t => lines.push(`  • ${t}`));
+    });
+  }
+  return lines.join('\n');
+}
+
+async function sendChat(sport) {
+  if (!groqApiKey) {
+    appendChatMsg(sport, 'ai', '⚠️ Please paste your Groq API key above and click CONNECT first. Get a free key at console.groq.com');
+    return;
+  }
+  const inp = document.getElementById(`chat-input-${sport}`);
+  const question = inp ? inp.value.trim() : '';
+  if (!question) return;
+
+  inp.value = '';
+  inp.disabled = true;
+  document.getElementById(`chat-send-${sport}`).disabled = true;
+  appendChatMsg(sport, 'user', question);
+  chatHistories[sport].push({ role: 'user', content: question });
+  const typingId = showTyping(sport);
+
+  try {
+    const messages = [
+      { role: 'system', content: buildSystemPrompt(sport, chatResults[sport]) },
+      ...chatHistories[sport]
+    ];
+    const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${groqApiKey}`
+      },
+      body: JSON.stringify({ model: 'llama-3.1-8b-instant', messages, max_tokens: 600, temperature: 0.7 })
+    });
+    removeTyping(sport, typingId);
+    const json = await resp.json();
+    if (!resp.ok) {
+      const msg = json.error?.message || `HTTP ${resp.status}`;
+      appendChatMsg(sport, 'ai', `⚠️ Groq error: ${msg}`);
+      chatHistories[sport].pop();
+    } else {
+      const answer = json.choices?.[0]?.message?.content?.trim() || 'No response.';
+      appendChatMsg(sport, 'ai', answer);
+      chatHistories[sport].push({ role: 'assistant', content: answer });
+      if (chatHistories[sport].length > 20) chatHistories[sport].splice(0, 2);
+    }
+  } catch(e) {
+    removeTyping(sport, typingId);
+    appendChatMsg(sport, 'ai', `⚠️ Network error: ${e.message}`);
+    chatHistories[sport].pop();
+  } finally {
+    inp.disabled = false;
+    document.getElementById(`chat-send-${sport}`).disabled = false;
+    inp.focus();
+  }
+}
+
+function appendChatMsg(sport, role, text) {
+  const container = document.getElementById(`chat-messages-${sport}`);
+  if (!container) return;
+  const div = document.createElement('div');
+  div.className = `chat-msg ${role}`;
+  const html = text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/\n/g,'<br>');
+  div.innerHTML = `<div class="chat-avatar">${role==='user'?'👤':'🤖'}</div><div class="chat-bubble">${html}</div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function showTyping(sport) {
+  const container = document.getElementById(`chat-messages-${sport}`);
+  if (!container) return null;
+  const id = 'typing-' + Date.now();
+  const div = document.createElement('div');
+  div.className = 'chat-msg ai'; div.id = id;
+  div.innerHTML = `<div class="chat-avatar">🤖</div><div class="chat-bubble chat-typing"><span></span><span></span><span></span></div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return id;
+}
+
+function removeTyping(sport, id) {
+  if (!id) return;
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+</script>
+</body>
+</html>
